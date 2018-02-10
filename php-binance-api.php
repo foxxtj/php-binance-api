@@ -50,7 +50,7 @@ class API {
 	public function orderStatus($symbol, $orderid) {
 		return $this->signedRequest("v3/order", ["symbol"=>$symbol, "orderId"=>$orderid]);
 	}
-	public function openOrders($symbol) {
+	public function openOrders($symbol = false) {
 		return $this->signedRequest("v3/openOrders",["symbol"=>$symbol]);
 	}
 	public function orders($symbol, $limit = 500) {
@@ -89,7 +89,6 @@ class API {
 		return $this->signedRequest("v3/withdrawHistory.html", $params, "GET");
 	}
 	public function prices() {
-	    $this->printMicroSecsTime('function prices');
 		return $this->priceData($this->request("v3/ticker/price"));
 	}
 	public function bookPrices() {
@@ -115,21 +114,10 @@ class API {
 	}
 
 	private function request($url, $params = [], $method = "GET") {
-		$opt = [
-			"http" => [
-				"method" => $method,
-				"ignore_errors" => true,
-				"header" => "User-Agent: Mozilla/4.0 (compatible; PHP Binance API)\r\n"
-			]
-		];
-		//$context = stream_context_create($opt);
 		$query = http_build_query($params, '', '&');
 		try {
-		    $this->printMicroSecsTime('Before get_data');
             $data = $this->get_data($this->base.$url.'?'.$query);
-            $this->printMicroSecsTime('After get_data');
-			//$data = file_get_contents($this->base.$url.'?'.$query, false, $context);
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			return ["error"=>$e->getMessage()];
 		}
 		return json_decode($data, true);
@@ -148,6 +136,9 @@ class API {
 			unset($params['wapi']);
 			$base = $this->wapi;
 		}
+		if(isset($params['symbol']) && !$params['symbol']){
+		    unset($params['symbol']);
+        }
 		$query = http_build_query($params, '', '&');
 		$signature = hash_hmac('sha256', $query, $this->api_secret);
 		$endpoint = $base.$url.'?'.$query.'&signature='.$signature;
@@ -745,10 +736,9 @@ class API {
             }
         );
 
-        $this->printMicroSecsTime('Before curl_exec');
         $data = curl_exec($ch);
-        $this->printMicroSecsTime('After curl_exec');
 
+        // TODO error messages from curl
         $curl_errno = curl_errno ($ch);
         $curl_error = curl_error ($ch);
         $http_status_code = curl_getinfo ($ch, CURLINFO_HTTP_CODE);

@@ -7,14 +7,16 @@
  */
 
 require '../vendor/autoload.php';
-$api = new Binance\API("YzToo8s8ZPsmoXAPFMuubyiBRcLh4Bc0iupGsu5oC9VbfpCL0rb2qjYNbS9J5s2E","EVLRZeYzhrGS4PkcL4QaT5xHQcntV16BfPlfuHUiqPwmnoqTmXWx5ZxHYA2v9Fge");
+$api = new Binance\API();
 
-
-// Get latest price of a symbol
-$ticker = $api->prices();
-print_r($ticker); // List prices of all symbols
-echo "Price of BNB: {$ticker['BNBBTC']} BTC.\n";
-
-// Get all of your positions, including estimated BTC value
-$balances = $api->balances($ticker);
-print_r($balances);
+// Grab realtime updated depth cache via WebSockets
+$api->depthCache(["XVGBTC"], function($api, $symbol, $depth) {
+    echo "{$symbol} depth cache update\n";
+    $limit = 11; // Show only the closest asks/bids
+    $sorted = $api->sortDepth($symbol, $limit);
+    $bid = $api->first($sorted['bids']);
+    $ask = $api->first($sorted['asks']);
+    echo $api->displayDepth($sorted);
+    echo "ask: {$ask}\n";
+    echo "bid: {$bid}\n";
+});
