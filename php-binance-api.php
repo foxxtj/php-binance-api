@@ -8,6 +8,8 @@
  * ============================================================ */
 
 namespace Binance;
+use Symfony\Component\Yaml\Yaml;
+
 class API {
 	protected $base = "https://api.binance.com/api/", $wapi = "https://api.binance.com/wapi/", $api_key, $api_secret;
 	protected $depthCache = [];
@@ -18,9 +20,14 @@ class API {
 	public $balances = [];
 	public $btc_value = 0.00; // value of available assets
 	public $btc_total = 0.00; // value of available + onOrder assets
-	public function __construct($api_key = '', $api_secret = '', $options = ["useServerTime"=>false]) {
-		$this->api_key = $api_key;
-		$this->api_secret = $api_secret;
+	public function __construct($options = ["useServerTime"=>false]) {
+	    $file = __DIR__ .'/config/parameters.yml';
+	    if(!file_exists($file)){
+	        die('parameters.yml does not exist' . PHP_EOL);
+        }
+        $config = Yaml::parseFile($file);
+		$this->api_key = $config['parameters']['binance-api-key'];
+		$this->api_secret = $config['parameters']['binance-api-secret'];
 		if ( isset($options['useServerTime']) && $options['useServerTime'] ) {
 			$this->useServerTime();
 		}
@@ -82,6 +89,7 @@ class API {
 		return $this->signedRequest("v3/withdrawHistory.html", $params, "GET");
 	}
 	public function prices() {
+	    $this->printMicroSecsTime('function prices');
 		return $this->priceData($this->request("v3/ticker/price"));
 	}
 	public function bookPrices() {
@@ -114,10 +122,13 @@ class API {
 				"header" => "User-Agent: Mozilla/4.0 (compatible; PHP Binance API)\r\n"
 			]
 		];
-		$context = stream_context_create($opt);
+		//$context = stream_context_create($opt);
 		$query = http_build_query($params, '', '&');
 		try {
-			$data = file_get_contents($this->base.$url.'?'.$query, false, $context);
+		    $this->printMicroSecsTime('Before get_data');
+            $data = $this->get_data($this->base.$url.'?'.$query);
+            $this->printMicroSecsTime('After get_data');
+			//$data = file_get_contents($this->base.$url.'?'.$query, false, $context);
 		} catch ( Exception $e ) {
 			return ["error"=>$e->getMessage()];
 		}
@@ -128,14 +139,9 @@ class API {
 		if ( empty($this->api_key) ) die("signedRequest error: API Key not set!");
 		if ( empty($this->api_secret) ) die("signedRequest error: API Secret not set!");
 		$base = $this->base;
-		$opt = [
-			"http" => [
-				"method" => $method,
-				"ignore_errors" => true,
-				"header" => "User-Agent: Mozilla/4.0 (compatible; PHP Binance API)\r\nX-MBX-APIKEY: {$this->api_key}\r\n"
-			]
+		$headers = [
+				"X-MBX-APIKEY" => $this->api_key,
 		];
-		$context = stream_context_create($opt);
 		$ts = (microtime(true)*1000) + $this->info['timeOffset'];
 		$params['timestamp'] = number_format($ts,0,'.','');
 		if ( isset($params['wapi']) ) {
@@ -146,7 +152,8 @@ class API {
 		$signature = hash_hmac('sha256', $query, $this->api_secret);
 		$endpoint = $base.$url.'?'.$query.'&signature='.$signature;
 		try {
-			$data = file_get_contents($endpoint, false, $context);
+            $data = $this->get_data($endpoint, $method, $headers);
+			//$data = file_get_contents($endpoint, false, $context);
 		} catch ( Exception $e ) {
 			return ["error"=>$e->getMessage()];
 		}
@@ -159,16 +166,12 @@ class API {
 
 	private function apiRequest($url, $method = "GET") {
 		if ( empty($this->api_key) ) die("apiRequest error: API Key not set!");
-		$opt = [
-			"http" => [
-				"method" => $method,
-				"ignore_errors" => true,
-				"header" => "User-Agent: Mozilla/4.0 (compatible; PHP Binance API)\r\nX-MBX-APIKEY: {$this->api_key}\r\n"
-			]
-		];
-		$context = stream_context_create($opt);
+        $headers = [
+            "X-MBX-APIKEY" => $this->api_key,
+        ];
 		try {
-			$data = file_get_contents($this->base.$url, false, $context);
+		    $data = $this->get_data($url, $method, $headers);
+			//$data = file_get_contents($this->base.$url, false, $context);
 		} catch ( Exception $e ) {
 			return ["error"=>$e->getMessage()];
 		}
@@ -667,15 +670,101 @@ class API {
 		});
 	}
 
-    private function get_data($url)
+    private function get_data($url, $method = 'GET', $headers = null, $body = null)
     {
+        if (!$headers)
+            $headers = array ();
+        elseif (is_array ($headers)) {
+            $tmp = $headers;
+            $headers = array ();
+            foreach ($tmp as $key => $value)
+                $headers[] = $key . ': ' . $value;
+        }
+
         $ch = curl_init();
-        $timeout = 5;
+        $timeout = 10000;
         curl_setopt($ch,CURLOPT_URL,$url);
-        curl_setopt($ch,CURLOPT_RETURNTRANSFER,1);
+
         curl_setopt($ch,CURLOPT_CONNECTTIMEOUT,$timeout);
+        curl_setopt($ch,CURLOPT_TIMEOUT_MS,$timeout);
+
+        curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
+        curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,false);
+
+        curl_setopt($ch,CURLOPT_USERAGENT,'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.94 Safari/537.36');
+
+        curl_setopt($ch,CURLOPT_ENCODING, '');
+
+        if ($method == 'GET') {
+
+            curl_setopt ($ch, CURLOPT_HTTPGET, true);
+
+        } else if ($method == 'POST') {
+
+            curl_setopt ($ch, CURLOPT_POST, true);
+            curl_setopt ($ch, CURLOPT_POSTFIELDS, $body);
+
+        } else if ($method == 'PUT') {
+
+            curl_setopt ($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+            curl_setopt ($ch, CURLOPT_PUT, true);
+            curl_setopt ($ch, CURLOPT_POSTFIELDS, $body);
+
+            $headers[] = 'X-HTTP-Method-Override: PUT';
+
+        } else if ($method == 'DELETE') {
+
+            curl_setopt ($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
+            curl_setopt ($ch, CURLOPT_POSTFIELDS, $body);
+
+            $headers[] = 'X-HTTP-Method-Override: DELETE';
+        }
+
+        if ($headers) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+
+        curl_setopt($ch,CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch,CURLOPT_FAILONERROR, false);
+
+        $response_headers = array ();
+
+        // this function is called by curl for each header received
+        curl_setopt ($ch, CURLOPT_HEADERFUNCTION,
+            function ($curl, $header) use (&$response_headers) {
+                $len = strlen ($header);
+                $header = explode (':', $header, 2);
+                if (count($header) < 2) // ignore invalid headers
+                    return $len;
+                $name = strtolower (trim ($header[0]));
+                if (!array_key_exists ($name, $response_headers))
+                    $response_headers[$name] = [trim ($header[1])];
+                else
+                    $response_headers[$name][] = trim ($header[1]);
+                return $len;
+            }
+        );
+
+        $this->printMicroSecsTime('Before curl_exec');
         $data = curl_exec($ch);
-        curl_close($ch);
+        $this->printMicroSecsTime('After curl_exec');
+
+        $curl_errno = curl_errno ($ch);
+        $curl_error = curl_error ($ch);
+        $http_status_code = curl_getinfo ($ch, CURLINFO_HTTP_CODE);
+
+        // Reset curl opts
+        curl_reset ($ch);
+
         return $data;
+    }
+
+    private function printMicroSecsTime($message)
+    {
+        $t = microtime(true);
+        $micro = sprintf("%06d",($t - floor($t)) * 1000000);
+        $d = new \DateTime( date('Y-m-d H:i:s.'.$micro, $t) );
+
+        print $d->format("Y-m-d H:i:s.u") . ' - ' . $message .PHP_EOL; // note at point on "u"
     }
 }

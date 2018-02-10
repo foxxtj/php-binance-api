@@ -12,7 +12,8 @@
         "ratchet/pawl": "^0.3.0",
         "react/socket": "^1.0 || ^0.8 || ^0.7",
         "ratchet/rfc6455": "^0.2.3",
-        "jaggedsoft/php-binance-api": "dev-master"
+        "jaggedsoft/php-binance-api": "dev-master",
+        "symfony/yaml": "^3.4.4"
     },
     "require-dev": {
         "phpunit/phpunit": "~4.8"
