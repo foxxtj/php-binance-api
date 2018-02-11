@@ -21,7 +21,7 @@ class API {
 	public $btc_value = 0.00; // value of available assets
 	public $btc_total = 0.00; // value of available + onOrder assets
 	public function __construct($options = ["useServerTime"=>false]) {
-	    $file = __DIR__ .'/config/parameters.yml';
+        $file = __DIR__ .'/../../../config/parameters.yml';
 	    if(!file_exists($file)){
 	        die('parameters.yml does not exist' . PHP_EOL);
         }
