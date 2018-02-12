@@ -23,7 +23,10 @@ class API {
 	public function __construct($options = ["useServerTime"=>false]) {
         $file = __DIR__ .'/../../../config/parameters.yml';
 	    if(!file_exists($file)){
-	        die('parameters.yml does not exist' . PHP_EOL);
+            $file = __DIR__ .'/config/parameters.yml';
+            if(!file_exists($file)) {
+                die('parameters.yml does not exist' . PHP_EOL);
+            }
         }
         $config = Yaml::parseFile($file);
 		$this->api_key = $config['parameters']['binance-api-key'];
@@ -91,6 +94,9 @@ class API {
 	public function prices() {
 		return $this->priceData($this->request("v3/ticker/price"));
 	}
+    public function tradesV1($symbol, $numberOfTrades = 500) {
+        return $this->request("v1/trades", ["symbol"=>$symbol, "limit"=>$numberOfTrades]);
+    }
 	public function bookPrices() {
 		return $this->bookPriceData($this->request("v3/ticker/bookTicker"));
 	}
